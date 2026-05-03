@@ -100,6 +100,14 @@ function requestHeaders(json = true) {
   };
 }
 
+// Sentinel error so callers can distinguish "no releases yet" from real failures.
+class NoReleasesError extends Error {
+  constructor(msg = "No releases published yet") {
+    super(msg);
+    this.code = "NO_RELEASES";
+  }
+}
+
 function httpsGetJson(url) {
   return new Promise((resolve, reject) => {
     https
@@ -107,6 +115,11 @@ function httpsGetJson(url) {
           if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
             res.resume();
             httpsGetJson(res.headers.location).then(resolve, reject);
+            return;
+          }
+          if (res.statusCode === 404) {
+            res.resume();
+            reject(new NoReleasesError(`Not found (404): ${url}`));
             return;
           }
           if (res.statusCode !== 200) {
