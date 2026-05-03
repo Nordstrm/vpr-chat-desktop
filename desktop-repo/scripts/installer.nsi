@@ -20,7 +20,7 @@
 !define DESCRIPTION "Encrypted Ephemeral Messaging"
 !define VERSIONMAJOR 1
 !define VERSIONMINOR 0
-!define VERSIONBUILD 1
+!define VERSIONBUILD 0
 !define HELPURL "https://vprchat.com"
 !define INSTALLSIZE 250000
 
