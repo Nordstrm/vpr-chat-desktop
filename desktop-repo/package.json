@@ -6,7 +6,7 @@
   "main": "electron/main.cjs",
   "author": {
     "name": "VPRCHAT",
-    "url": "https://vprchat.lovable.app"
+    "url": "https://vprchat.com"
   },
   "license": "UNLICENSED",
   "private": true,
