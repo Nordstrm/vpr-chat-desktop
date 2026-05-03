@@ -20,17 +20,10 @@ const { spawn } = require("child_process");
 const crypto = require("crypto");
 const os = require("os");
 
-// Primary custom domain. Also recognize www and the lovable.app fallback as
-// "internal" so navigations between them stay inside the desktop window.
-const APP_URL = "https://vprchat.com";
-const ALLOWED_HOSTS = new Set([
-  "vprchat.com",
-  "www.vprchat.com",
-  "vprchat.lovable.app",
-]);
+const APP_URL = "https://vprchat.lovable.app";
 const CREDS_FILE = path.join(app.getPath("userData"), "vpr-remember.bin");
 
-// --- Manual Updater (custom JSON manifest on Lovable Cloud) ---------------
+// --- Manual Updater (GitHub Releases, manual only) -------------------------
 // Flow:
 //   1. Renderer calls vpr:updater-check → main fetches MANIFEST_URL.
 //   2. If manifest.version > app.getVersion(), state becomes "available".
@@ -40,7 +33,17 @@ const CREDS_FILE = path.join(app.getPath("userData"), "vpr-remember.bin");
 //   4. Renderer calls vpr:updater-install → we spawn the installer detached
 //      and quit the app. The NSIS installer overwrites the old files and
 //      relaunches VPR Chat on success.
-const MANIFEST_URL =
+// Primary source: GitHub Releases (public repo). We read the latest published
+// release, find a Windows installer .exe asset, and (optionally) read the
+// bundled latest.json for sha256. If the latest release was created without an
+// installer asset, we scan recent releases so the button still works once a
+// valid release exists. Fallback: legacy Cloud-hosted manifest.
+const GITHUB_REPO = "Nordstrm/vpr-chat-desktop";
+const GITHUB_RELEASES_API =
+  `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+const GITHUB_RELEASES_LIST_API =
+  `https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=20`;
+const FALLBACK_MANIFEST_URL =
   "https://qwgurzgtmrgzpywpugbb.supabase.co/storage/v1/object/public/desktop-updates/latest.json";
 
 let _updaterState = {
@@ -67,11 +70,17 @@ function setStatus(patch) {
   broadcastUpdater();
 }
 
+function normalizeVersion(value) {
+  const raw = String(value || "").trim();
+  const match = raw.match(/v?(\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.-]+)?)/i);
+  return (match ? match[1] : raw.replace(/^v/i, "")).split("+")[0];
+}
+
 // Compare semver-ish strings: "1.2.10" > "1.2.9".
 function isNewer(remote, local) {
   if (!remote || !local) return false;
-  const a = String(remote).split(".").map((n) => parseInt(n, 10) || 0);
-  const b = String(local).split(".").map((n) => parseInt(n, 10) || 0);
+  const a = normalizeVersion(remote).split(/[.-]/).map((n) => parseInt(n, 10) || 0);
+  const b = normalizeVersion(local).split(/[.-]/).map((n) => parseInt(n, 10) || 0);
   const len = Math.max(a.length, b.length);
   for (let i = 0; i < len; i++) {
     const x = a[i] || 0;
@@ -82,45 +91,102 @@ function isNewer(remote, local) {
   return false;
 }
 
+function requestHeaders(json = true) {
+  return {
+    "cache-control": "no-cache",
+    // GitHub API rejects requests without a User-Agent.
+    "user-agent": "VPR-Chat-Desktop-Updater",
+    accept: json ? "application/vnd.github+json, application/json" : "application/octet-stream,*/*",
+  };
+}
+
 function httpsGetJson(url) {
   return new Promise((resolve, reject) => {
     https
-      .get(url, { headers: { "cache-control": "no-cache" } }, (res) => {
-        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          httpsGetJson(res.headers.location).then(resolve, reject);
-          return;
-        }
-        if (res.statusCode !== 200) {
-          reject(new Error(`Manifest fetch failed (${res.statusCode})`));
-          res.resume();
-          return;
-        }
-        let body = "";
-        res.setEncoding("utf8");
-        res.on("data", (c) => (body += c));
-        res.on("end", () => {
-          try {
-            resolve(JSON.parse(body));
-          } catch (e) {
-            reject(new Error("Manifest is not valid JSON"));
+      .get(url, { headers: requestHeaders(true) }, (res) => {
+          if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            res.resume();
+            httpsGetJson(res.headers.location).then(resolve, reject);
+            return;
           }
-        });
-      })
+          if (res.statusCode !== 200) {
+            reject(new Error(`Manifest fetch failed (${res.statusCode})`));
+            res.resume();
+            return;
+          }
+          let body = "";
+          res.setEncoding("utf8");
+          res.on("data", (c) => (body += c));
+          res.on("end", () => {
+            try {
+              resolve(JSON.parse(body));
+            } catch (e) {
+              reject(new Error("Manifest is not valid JSON"));
+            }
+          });
+        })
       .on("error", reject);
   });
+}
+
+function pickInstallerAsset(assets) {
+  const exeAssets = (Array.isArray(assets) ? assets : []).filter(
+    (a) => typeof a?.name === "string" && typeof a?.browser_download_url === "string" && /\.exe$/i.test(a.name)
+  );
+  return (
+    exeAssets.find((a) => /vpr[-_\s]*chat[-_\s]*setup/i.test(a.name)) ||
+    exeAssets.find((a) => /(setup|installer|install)/i.test(a.name)) ||
+    exeAssets[0] ||
+    null
+  );
+}
+
+async function releaseToInstallerInfo(release) {
+  if (!release || release.draft) return null;
+  const version = normalizeVersion(release.tag_name || release.name || "");
+  const assets = Array.isArray(release.assets) ? release.assets : [];
+  const exe = pickInstallerAsset(assets);
+  if (!version || !exe) return null;
+
+  let sha256 = null;
+  const manifestAsset = assets.find((a) => /^latest\.json$/i.test(a.name || ""));
+  if (manifestAsset?.browser_download_url) {
+    try {
+      const m = await httpsGetJson(manifestAsset.browser_download_url);
+      if (m && typeof m.sha256 === "string") sha256 = m.sha256.toLowerCase();
+    } catch { /* sha is optional */ }
+  }
+
+  return { version, url: exe.browser_download_url, sha256 };
+}
+
+// Resolve the latest installer info from GitHub Releases.
+// Returns { version, url, sha256 | null } or throws.
+async function fetchGithubLatest() {
+  const release = await httpsGetJson(GITHUB_RELEASES_API);
+  const latest = await releaseToInstallerInfo(release);
+  if (latest) return latest;
+
+  const releases = await httpsGetJson(GITHUB_RELEASES_LIST_API);
+  for (const item of Array.isArray(releases) ? releases : []) {
+    const info = await releaseToInstallerInfo(item);
+    if (info) return info;
+  }
+  throw new Error(`No Windows installer .exe asset found in ${GITHUB_REPO} releases`);
 }
 
 function downloadToFile(url, destPath, onProgress) {
   return new Promise((resolve, reject) => {
     const doRequest = (currentUrl) => {
       https
-        .get(currentUrl, (res) => {
+        .get(currentUrl, { headers: requestHeaders(false) }, (res) => {
           if (
             res.statusCode &&
             res.statusCode >= 300 &&
             res.statusCode < 400 &&
             res.headers.location
           ) {
+            res.resume();
             doRequest(res.headers.location);
             return;
           }
@@ -173,7 +239,7 @@ if (!gotLock) {
 
 let mainWindow = null;
 
-// --- Screen-share picker bridge -------------------------------------------
+// --- Screen-share picker bridge ------------------------------------------
 let _pendingSelectedSourceId = null;
 
 ipcMain.handle("vpr:get-screen-sources", async () => {
@@ -259,12 +325,11 @@ function createWindow() {
   mainWindow.loadURL(APP_URL);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    try {
-      const host = new URL(url).hostname;
-      if (ALLOWED_HOSTS.has(host)) return { action: "allow" };
-    } catch { /* noop */ }
-    shell.openExternal(url);
-    return { action: "deny" };
+    if (!url.startsWith(APP_URL)) {
+      shell.openExternal(url);
+      return { action: "deny" };
+    }
+    return { action: "allow" };
   });
 
   const sendState = () => {
@@ -338,11 +403,21 @@ ipcMain.handle("vpr:updater-get-state", () => _updaterState);
 ipcMain.handle("vpr:updater-check", async () => {
   setStatus({ status: "checking", error: null, progress: 0 });
   try {
-    const manifest = await httpsGetJson(MANIFEST_URL);
-    const remoteVersion = String(manifest.version || "").trim();
-    const url = String(manifest.url || "").trim();
-    const sha = manifest.sha256 ? String(manifest.sha256).toLowerCase() : null;
-
+    let remoteVersion = "";
+    let url = "";
+    let sha = null;
+    try {
+      const gh = await fetchGithubLatest();
+      remoteVersion = gh.version;
+      url = gh.url;
+      sha = gh.sha256;
+    } catch (ghErr) {
+      console.warn("[updater] GitHub release lookup failed, falling back:", ghErr?.message || ghErr);
+      const manifest = await httpsGetJson(FALLBACK_MANIFEST_URL);
+      remoteVersion = String(manifest.version || "").trim();
+      url = String(manifest.url || "").trim();
+      sha = manifest.sha256 ? String(manifest.sha256).toLowerCase() : null;
+    }
     if (!remoteVersion || !url) {
       setStatus({ status: "error", error: "Manifest is missing version or url" });
       return _updaterState;

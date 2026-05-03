@@ -10,7 +10,7 @@
 ;   - Auto-launches VPR Chat on finish
 ;
 ; This file is consumed by the in-app updater (silent /S flag) AND by users
-; who download the .exe directly from https://vprchat.com/download.
+; who download the .exe directly from https://vprchat.lovable.app/download.
 ; The /S codepath skips the wizard entirely; the manual codepath shows the
 ; full branded experience.
 ; ============================================================================
@@ -20,8 +20,8 @@
 !define DESCRIPTION "Encrypted Ephemeral Messaging"
 !define VERSIONMAJOR 1
 !define VERSIONMINOR 0
-!define VERSIONBUILD 0
-!define HELPURL "https://vprchat.com"
+!define VERSIONBUILD 2
+!define HELPURL "https://vprchat.lovable.app"
 !define INSTALLSIZE 250000
 
 ; ----- File metadata (Properties → Details on the .exe) ---------------------
@@ -50,7 +50,7 @@ BrandingText      "VPR Chat ${VERSIONMAJOR}.${VERSIONMINOR}.${VERSIONBUILD} — 
 !define MUI_ICON                  "..\build\icon.ico"
 !define MUI_UNICON                "..\build\icon.ico"
 !define MUI_ABORTWARNING
-!define MUI_ABORTWARNING_TEXT     "Abort the VPR Chat installation? You can install again any time from vprchat.com/download."
+!define MUI_ABORTWARNING_TEXT     "Abort the VPR Chat installation? You can install again any time from vprchat.lovable.app/download."
 
 ; Welcome / Finish — full sidebar bitmap (164x314 BMP3)
 !define MUI_WELCOMEFINISHPAGE_BITMAP        "..\build\installer-sidebar.bmp"
@@ -74,8 +74,8 @@ BrandingText      "VPR Chat ${VERSIONMAJOR}.${VERSIONMINOR}.${VERSIONBUILD} — 
 !define MUI_FINISHPAGE_TEXT                 "VPR Chat ${VERSIONMAJOR}.${VERSIONMINOR}.${VERSIONBUILD} has been installed.$\r$\n$\r$\nThanks for choosing privacy-first messaging."
 !define MUI_FINISHPAGE_RUN                  "$INSTDIR\VPR Chat.exe"
 !define MUI_FINISHPAGE_RUN_TEXT             "Launch VPR Chat now"
-!define MUI_FINISHPAGE_LINK                 "vprchat.com"
-!define MUI_FINISHPAGE_LINK_LOCATION        "https://vprchat.com"
+!define MUI_FINISHPAGE_LINK                 "vprchat.lovable.app"
+!define MUI_FINISHPAGE_LINK_LOCATION        "https://vprchat.lovable.app"
 !define MUI_FINISHPAGE_NOREBOOTSUPPORT
 
 ; Uninstaller wording

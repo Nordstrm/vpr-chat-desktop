@@ -1,6 +1,6 @@
 # VPR Chat — Desktop Wrapper
 
-Standalone Electron wrapper for **VPR Chat** (https://vprchat.com).
+Standalone Electron wrapper for **VPR Chat** (https://vprchat.lovable.app).
 This repo only contains the wrapper + branded NSIS installer — the web app itself
 is loaded over HTTPS from the live deployment, so no React/source code lives here.
 
@@ -28,7 +28,7 @@ That's it. New users get the new installer; existing users see the
 
 ```bash
 npm install
-npm start          # launches Electron pointing at https://vprchat.com
+npm start          # launches Electron pointing at https://vprchat.lovable.app
 ```
 
 ## File overview
@@ -48,5 +48,8 @@ npm start          # launches Electron pointing at https://vprchat.com
 
 ```bash
 npm install
-npm start          # launches Electron pointing at https://vprchat.com
+npm run package:win
+# install NSIS from https://nsis.sourceforge.io/, then:
+makensis scripts/installer.nsi
+# → electron-release/VPR-Chat-Setup.exe
 ```

@@ -3,7 +3,7 @@ name: Build VPR Chat Installer
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ['v*', '*.*.*']
   workflow_dispatch:
 
 jobs:
@@ -23,6 +23,14 @@ jobs:
         id: version
         shell: bash
         run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Sync installer metadata version
+        shell: bash
+        run: |
+          IFS='.' read -r MAJOR MINOR BUILD <<< "${{ steps.version.outputs.version }}"
+          sed -i "s/!define VERSIONMAJOR .*/!define VERSIONMAJOR ${MAJOR}/" scripts/installer.nsi
+          sed -i "s/!define VERSIONMINOR .*/!define VERSIONMINOR ${MINOR}/" scripts/installer.nsi
+          sed -i "s/!define VERSIONBUILD .*/!define VERSIONBUILD ${BUILD:-0}/" scripts/installer.nsi
 
       - name: Package Electron app (Windows x64)
         run: npm run package:win
@@ -53,7 +61,7 @@ jobs:
           cat > electron-release/latest.json <<EOF
           {
             "version": "${{ steps.version.outputs.version }}",
-            "url": "https://qwgurzgtmrgzpywpugbb.supabase.co/storage/v1/object/public/desktop-updates/VPR-Chat-Setup-${{ steps.version.outputs.version }}.exe",
+            "url": "https://github.com/Nordstrm/vpr-chat-desktop/releases/download/${GITHUB_REF_NAME}/VPR-Chat-Setup-${{ steps.version.outputs.version }}.exe",
             "sha256": "${{ steps.sha.outputs.sha256 }}",
             "notes": "VPR Chat ${{ steps.version.outputs.version }}",
             "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -71,7 +79,7 @@ jobs:
           retention-days: 90
 
       - name: Create GitHub Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -81,5 +89,3 @@ jobs:
             VPR Chat ${{ steps.version.outputs.version }}
 
             **SHA-256:** `${{ steps.sha.outputs.sha256 }}`
-
-            Upload `VPR-Chat-Setup-${{ steps.version.outputs.version }}.exe` and `latest.json` to the `desktop-updates` and `app-downloads` Cloud buckets to publish.
