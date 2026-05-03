@@ -1,7 +1,7 @@
 {
   "name": "vprchat-desktop",
   "productName": "VPR Chat",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "VPR Chat desktop wrapper — privacy-first encrypted messaging",
   "main": "electron/main.cjs",
   "author": {
