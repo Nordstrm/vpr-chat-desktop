@@ -1,0 +1,22 @@
+{
+  "name": "vprchat-desktop",
+  "productName": "VPR Chat",
+  "version": "1.0.1",
+  "description": "VPR Chat desktop wrapper — privacy-first encrypted messaging",
+  "main": "electron/main.cjs",
+  "author": {
+    "name": "VPRCHAT",
+    "url": "https://vprchat.lovable.app"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "package:win": "electron-packager . \"VPR Chat\" --platform=win32 --arch=x64 --out=electron-release --overwrite --icon=build/icon.ico --app-version=$npm_package_version --win32metadata.CompanyName=VPRCHAT --win32metadata.FileDescription=\"VPR Chat\" --win32metadata.ProductName=\"VPR Chat\" --ignore=\"^/electron-release$\" --ignore=\"^/.github$\" --ignore=\"^/scripts$\"",
+    "build:installer": "makensis scripts/installer.nsi"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "@electron/packager": "^18.3.6"
+  }
+}
