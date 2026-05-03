@@ -20,7 +20,14 @@ const { spawn } = require("child_process");
 const crypto = require("crypto");
 const os = require("os");
 
-const APP_URL = "https://vprchat.lovable.app";
+// Primary custom domain. Also recognize www and the lovable.app fallback as
+// "internal" so navigations between them stay inside the desktop window.
+const APP_URL = "https://vprchat.com";
+const ALLOWED_HOSTS = new Set([
+  "vprchat.com",
+  "www.vprchat.com",
+  "vprchat.lovable.app",
+]);
 const CREDS_FILE = path.join(app.getPath("userData"), "vpr-remember.bin");
 
 // --- Manual Updater (custom JSON manifest on Lovable Cloud) ---------------
@@ -252,11 +259,12 @@ function createWindow() {
   mainWindow.loadURL(APP_URL);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (!url.startsWith(APP_URL)) {
-      shell.openExternal(url);
-      return { action: "deny" };
-    }
-    return { action: "allow" };
+    try {
+      const host = new URL(url).hostname;
+      if (ALLOWED_HOSTS.has(host)) return { action: "allow" };
+    } catch { /* noop */ }
+    shell.openExternal(url);
+    return { action: "deny" };
   });
 
   const sendState = () => {
