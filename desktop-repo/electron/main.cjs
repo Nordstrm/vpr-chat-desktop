@@ -176,12 +176,25 @@ async function releaseToInstallerInfo(release) {
 // Resolve the latest installer info from GitHub Releases.
 // Returns { version, url, sha256 | null } or throws.
 async function fetchGithubLatest() {
-  const release = await httpsGetJson(GITHUB_RELEASES_API);
-  const latest = await releaseToInstallerInfo(release);
-  if (latest) return latest;
+  let release = null;
+  try {
+    release = await httpsGetJson(GITHUB_RELEASES_API);
+  } catch (err) {
+    if (err?.code !== "NO_RELEASES") throw err;
+    // No "latest" release yet — fall through to the list endpoint, which
+    // returns [] (200) when the repo simply has no releases at all.
+  }
+  if (release) {
+    const latest = await releaseToInstallerInfo(release);
+    if (latest) return latest;
+  }
 
   const releases = await httpsGetJson(GITHUB_RELEASES_LIST_API);
-  for (const item of Array.isArray(releases) ? releases : []) {
+  const list = Array.isArray(releases) ? releases : [];
+  if (list.length === 0) {
+    throw new NoReleasesError(`No releases published in ${GITHUB_REPO} yet`);
+  }
+  for (const item of list) {
     const info = await releaseToInstallerInfo(item);
     if (info) return info;
   }
@@ -419,20 +432,39 @@ ipcMain.handle("vpr:updater-check", async () => {
     let remoteVersion = "";
     let url = "";
     let sha = null;
+    let ghNoReleases = false;
     try {
       const gh = await fetchGithubLatest();
       remoteVersion = gh.version;
       url = gh.url;
       sha = gh.sha256;
     } catch (ghErr) {
+      ghNoReleases = ghErr?.code === "NO_RELEASES";
       console.warn("[updater] GitHub release lookup failed, falling back:", ghErr?.message || ghErr);
-      const manifest = await httpsGetJson(FALLBACK_MANIFEST_URL);
-      remoteVersion = String(manifest.version || "").trim();
-      url = String(manifest.url || "").trim();
-      sha = manifest.sha256 ? String(manifest.sha256).toLowerCase() : null;
+      try {
+        const manifest = await httpsGetJson(FALLBACK_MANIFEST_URL);
+        remoteVersion = String(manifest.version || "").trim();
+        url = String(manifest.url || "").trim();
+        sha = manifest.sha256 ? String(manifest.sha256).toLowerCase() : null;
+      } catch (fbErr) {
+        // If GitHub said "no releases" and the fallback manifest is also
+        // missing, treat it as "you're on the latest version" instead of
+        // a hard error — this is the expected state right after install.
+        if (ghNoReleases && fbErr?.code === "NO_RELEASES") {
+          setStatus({
+            status: "not-available",
+            newVersion: null,
+            downloadUrl: null,
+            sha256: null,
+            error: null,
+          });
+          return _updaterState;
+        }
+        throw fbErr;
+      }
     }
     if (!remoteVersion || !url) {
-      setStatus({ status: "error", error: "Manifest is missing version or url" });
+      setStatus({ status: "error", error: "Update manifest is missing version or url." });
       return _updaterState;
     }
     if (!isNewer(remoteVersion, app.getVersion())) {
