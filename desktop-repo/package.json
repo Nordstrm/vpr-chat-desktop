@@ -1,12 +1,12 @@
 {
   "name": "vprchat-desktop",
   "productName": "VPR Chat",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "VPR Chat desktop wrapper — privacy-first encrypted messaging",
   "main": "electron/main.cjs",
   "author": {
     "name": "VPRCHAT",
-    "url": "https://vprchat.com"
+    "url": "https://vprchat.lovable.app"
   },
   "license": "UNLICENSED",
   "private": true,

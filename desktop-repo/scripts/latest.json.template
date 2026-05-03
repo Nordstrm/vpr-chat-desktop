@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "url": "https://qwgurzgtmrgzpywpugbb.supabase.co/storage/v1/object/public/desktop-updates/VPR-Chat-Setup-1.0.0.exe",
-  "notes": "Initial release of VPR Chat desktop wrapper.",
-  "pub_date": "2026-05-03T00:00:00Z"
+  "version": "1.0.2",
+  "url": "https://github.com/Nordstrm/vpr-chat-desktop/releases/download/v1.0.2/VPR-Chat-Setup-1.0.2.exe",
+  "notes": "Branded installer wizard, in-app updater overlay, latest features.",
+  "pub_date": "2026-04-28T00:00:00Z"
 }
