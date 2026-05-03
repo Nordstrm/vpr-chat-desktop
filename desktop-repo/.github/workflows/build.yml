@@ -1,0 +1,85 @@
+name: Build VPR Chat Installer
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Read version from package.json
+        id: version
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Package Electron app (Windows x64)
+        run: npm run package:win
+
+      - name: Install NSIS
+        run: choco install nsis -y
+
+      - name: Build branded installer
+        run: makensis scripts/installer.nsi
+        shell: cmd
+
+      - name: Compute SHA-256
+        id: sha
+        shell: bash
+        run: |
+          HASH=$(sha256sum electron-release/VPR-Chat-Setup.exe | awk '{print $1}')
+          echo "sha256=$HASH" >> $GITHUB_OUTPUT
+          echo "Installer SHA-256: $HASH"
+
+      - name: Rename installer with version
+        shell: bash
+        run: |
+          mv "electron-release/VPR-Chat-Setup.exe" "electron-release/VPR-Chat-Setup-${{ steps.version.outputs.version }}.exe"
+
+      - name: Generate latest.json
+        shell: bash
+        run: |
+          cat > electron-release/latest.json <<EOF
+          {
+            "version": "${{ steps.version.outputs.version }}",
+            "url": "https://qwgurzgtmrgzpywpugbb.supabase.co/storage/v1/object/public/desktop-updates/VPR-Chat-Setup-${{ steps.version.outputs.version }}.exe",
+            "sha256": "${{ steps.sha.outputs.sha256 }}",
+            "notes": "VPR Chat ${{ steps.version.outputs.version }}",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          cat electron-release/latest.json
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VPR-Chat-Setup-${{ steps.version.outputs.version }}
+          path: |
+            electron-release/VPR-Chat-Setup-*.exe
+            electron-release/latest.json
+          retention-days: 90
+
+      - name: Create GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            electron-release/VPR-Chat-Setup-*.exe
+            electron-release/latest.json
+          body: |
+            VPR Chat ${{ steps.version.outputs.version }}
+
+            **SHA-256:** `${{ steps.sha.outputs.sha256 }}`
+
+            Upload `VPR-Chat-Setup-${{ steps.version.outputs.version }}.exe` and `latest.json` to the `desktop-updates` and `app-downloads` Cloud buckets to publish.
