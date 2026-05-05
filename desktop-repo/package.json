@@ -13,7 +13,8 @@
   "scripts": {
     "start": "electron .",
     "package:win": "electron-packager . \"VPR Chat\" --platform=win32 --arch=x64 --out=electron-release --overwrite --icon=build/icon.ico --app-version=$npm_package_version --win32metadata.CompanyName=VPRCHAT --win32metadata.FileDescription=\"VPR Chat\" --win32metadata.ProductName=\"VPR Chat\" --ignore=\"^/electron-release$\" --ignore=\"^/.github$\" --ignore=\"^/scripts$\"",
-    "build:installer": "makensis scripts/installer.nsi"
+    "build:installer": "makensis scripts/installer.nsi",
+    "release": "node -e \"const v=require('./package.json').version; const {execSync}=require('child_process'); const run=c=>{console.log('> '+c);execSync(c,{stdio:'inherit'})}; try{execSync('git diff --quiet && git diff --cached --quiet')}catch(e){console.error('Working tree has uncommitted changes. Commit or stash first.');process.exit(1)} run('git tag v'+v); run('git push origin v'+v); console.log('\\nPushed tag v'+v+' — GitHub Actions will build and publish the Release.');\""
   },
   "devDependencies": {
     "electron": "^33.0.0",
